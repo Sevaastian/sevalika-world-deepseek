@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Engine } from "@/lib/engine";
+import { Engine, type Npc } from "@/lib/engine";
 import { RoomNetwork, type ChatMessage } from "@/lib/network";
 import { supabase } from "@/lib/supabase";
 import { ROOMS } from "@/lib/iso";
@@ -14,6 +14,9 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
   const [currentRoom, setCurrentRoom] = useState("cadde-1");
   const [onlineCount, setOnlineCount] = useState(1);
   const [chatInput, setChatInput] = useState("");
+  
+  // NPC Menüsü için state
+  const [activeNpc, setActiveNpc] = useState<Npc | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -22,23 +25,20 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
     engine.myUsername = profile.username;
     engine.currentRoom = currentRoom;
     
-    // PORTAL MANTIĞI: Karakter kapıya yürüdüğünde tetiklenir
+    // NPC'ye tıklanınca menüyü aç
+    engine.onNpcClick = (npc) => setActiveNpc(npc);
+
     engine.onPortalEnter = async (targetRoom: string) => {
-      // 1. Ağdan eski odadan ayrıl
       netRef.current?.leave();
-      
-      // 2. Ekranı temizle, yeni odaya geç
       engine.setRoom(targetRoom);
       setCurrentRoom(targetRoom);
-      
-      // 3. Yeni odaya ağdan bağlan
+      setActiveNpc(null); // Odadan çıkınca menüyü kapat
       connectToNetwork(engine, targetRoom);
     };
 
     engineRef.current = engine;
     engine.start();
 
-    // İlk bağlantıyı kur
     connectToNetwork(engine, currentRoom);
 
     return () => {
@@ -48,7 +48,6 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
 
-  // Ağa bağlanma fonksiyonunu ayırdık (Oda değişince tekrar kullanacağız)
   const connectToNetwork = (engine: Engine, roomSlug: string) => {
     const net = new RoomNetwork(
       roomSlug, 
@@ -100,27 +99,17 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-
     const text = chatInput.trim();
     setChatInput("");
 
     if (engineRef.current) {
       engineRef.current.bubbles.push({
-        id: Math.random().toString(),
-        sender: profile.username,
-        text: text,
-        createdAt: Date.now()
+        id: Math.random().toString(), sender: profile.username, text, createdAt: Date.now()
       });
     }
 
-    const { error } = await supabase.rpc("send_chat", {
-      p_room: currentRoom, // Bulunduğumuz odaya gönder
-      p_text: text
-    });
-
-    if (error) {
-      alert("Mesaj gönderilemedi: " + error.message);
-    }
+    const { error } = await supabase.rpc("send_chat", { p_room: currentRoom, p_text: text });
+    if (error) alert("Mesaj gönderilemedi: " + error.message);
   };
 
   return (
@@ -129,24 +118,22 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
         <canvas
           ref={canvasRef}
           className="absolute inset-0 cursor-pointer"
+          onMouseMove={(e) => engineRef.current?.setHover(e.clientX, e.clientY)}
+          onMouseLeave={() => { if(engineRef.current) engineRef.current.hoverTile = null; }}
           onClick={(e) => {
             if (!engineRef.current || !netRef.current) return;
             const target = engineRef.current.click(e.clientX, e.clientY);
-            if (target) {
+            // NPC'ye tıklanmadıysa yürüme emri gönder
+            if (target && !target.isNpc) {
               netRef.current.track({
-                id: profile.id,
-                name: profile.username,
-                gx: target.gx,
-                gy: target.gy,
-                shirtColor: profile.shirtColor,
-                hairColor: profile.hairColor,
-                skinColor: profile.skinColor,
-                role: profile.role
+                id: profile.id, name: profile.username, gx: target.gx, gy: target.gy,
+                shirtColor: profile.shirtColor, hairColor: profile.hairColor, skinColor: profile.skinColor, role: profile.role
               });
             }
           }}
         />
         
+        {/* Üst Bilgi Barı */}
         <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
           <div className="bg-slate-900/80 backdrop-blur-md p-4 rounded-xl border border-slate-700 text-white pointer-events-auto flex flex-col gap-1">
             <div className="flex items-center gap-2">
@@ -158,29 +145,45 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
             <p className="text-[10px] text-green-400 font-bold mt-1">🟢 {onlineCount} Çevrimiçi</p>
           </div>
 
-          <button 
-            onClick={onLogout}
-            className="bg-red-500/20 hover:bg-red-500/40 border border-red-500/50 text-red-200 px-4 py-2 rounded-xl text-sm font-bold backdrop-blur-md transition pointer-events-auto"
-          >
+          <button onClick={onLogout} className="bg-red-500/20 hover:bg-red-500/40 border border-red-500/50 text-red-200 px-4 py-2 rounded-xl text-sm font-bold backdrop-blur-md transition pointer-events-auto">
             Çıkış Yap
           </button>
         </div>
+
+        {/* NPC PENCERESİ (Tıklayınca Açılır) */}
+        {activeNpc && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl z-50 w-80 pointer-events-auto">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-xl font-black text-white">{activeNpc.name}</h2>
+                <p className="text-sm text-yellow-400 font-bold">{activeNpc.role}</p>
+              </div>
+              <button onClick={() => setActiveNpc(null)} className="text-slate-400 hover:text-white bg-slate-800 px-2 py-1 rounded-md text-xs font-bold">✕ Kapat</button>
+            </div>
+            
+            <div className="space-y-2">
+              <p className="text-xs text-slate-400 mb-3">Merhaba gezgin! Sana nasıl yardımcı olabilirim?</p>
+              <button className="w-full bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold py-2 rounded-xl transition">
+                Alışveriş Yap (Yakında)
+              </button>
+              <button className="w-full bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold py-2 rounded-xl transition">
+                Konuş (Yakında)
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
+      {/* Sohbet Barı */}
       <div className="bg-slate-900 border-t border-slate-800 p-3 relative z-10">
         <form onSubmit={sendMessage} className="max-w-3xl mx-auto flex gap-2">
           <input
-            type="text"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            maxLength={140}
+            type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={140}
             placeholder="Bir şeyler yaz..."
             className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-yellow-400"
           />
-          <button 
-            type="submit"
-            className="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold px-6 py-2.5 rounded-xl transition"
-          >
+          <button type="submit" className="bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold px-6 py-2.5 rounded-xl transition">
             Gönder
           </button>
         </form>
