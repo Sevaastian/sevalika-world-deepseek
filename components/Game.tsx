@@ -22,6 +22,7 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
 
     const room = "cadde-1";
     
+    // DİKKAT: Burada RoomNetwork'e 4 parametre gidiyor. (oda, id, oyuncular, mesajlar)
     const net = new RoomNetwork(
       room, 
       profile.id, 
@@ -46,7 +47,6 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
         setOnlineCount(players.length);
       },
       (msg: ChatMessage) => {
-        // Yeni mesaj geldiğinde motora balon olarak ekle
         if (engineRef.current) {
           engineRef.current.bubbles.push({
             id: msg.id,
@@ -82,7 +82,6 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
     const text = chatInput.trim();
     setChatInput("");
 
-    // Supabase RPC ile veritabanına mesaj gönder
     const { error } = await supabase.rpc("send_chat", {
       p_room: "cadde-1",
       p_text: text
@@ -136,7 +135,6 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
         </div>
       </div>
 
-      {/* Sohbet Barı */}
       <div className="bg-slate-900 border-t border-slate-800 p-3 relative z-10">
         <form onSubmit={sendMessage} className="max-w-3xl mx-auto flex gap-2">
           <input
