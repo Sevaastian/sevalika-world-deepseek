@@ -7,8 +7,10 @@ const WALK_SPEED = 4;
 export interface RemotePlayer {
   id: string;
   name: string;
-  gx: number;
-  gy: number;
+  gx: number; // Hedef X
+  gy: number; // Hedef Y
+  currGx: number; // Ekranda görünen anlık X (pürüzsüz yürüme için)
+  currGy: number; // Ekranda görünen anlık Y
   shirtColor: string;
   role: string;
 }
@@ -43,6 +45,7 @@ export class Engine {
   stop() { cancelAnimationFrame(this.raf); }
 
   private update(dt: number) {
+    // 1. Kendi karakterimizi yürüt
     let step = WALK_SPEED * dt;
     while (step > 0 && this.path.length > 0) {
       const next = this.path[0];
@@ -57,6 +60,19 @@ export class Engine {
         this.me.gx += (dx / dist) * step;
         this.me.gy += (dy / dist) * step;
         step = 0;
+      }
+    }
+
+    // 2. Diğer oyuncuları pürüzsüzce hedeflerine yürüt (Işınlanmayı önler)
+    for (const p of this.otherPlayers) {
+      const dx = p.gx - p.currGx;
+      const dy = p.gy - p.currGy;
+      const dist = Math.hypot(dx, dy);
+      
+      if (dist > 0.05) {
+        const step2 = Math.min(dist, WALK_SPEED * dt);
+        p.currGx += (dx / dist) * step2;
+        p.currGy += (dy / dist) * step2;
       }
     }
   }
@@ -75,7 +91,7 @@ export class Engine {
       steps.push({ gx: cx, gy: cy });
     }
     this.path = steps;
-    return { gx, gy }; // Tıklanan hedefi döndür (ağa göndermek için)
+    return { gx, gy };
   }
 
   private resize() {
@@ -110,28 +126,23 @@ export class Engine {
     this.ctx.stroke();
   }
 
-  // Karakter çizim fonksiyonu (Hem kendimiz hem diğerleri için)
   private drawCharacter(gx: number, gy: number, color: string, name: string, isMe: boolean) {
     const { sx, sy } = gridToScreen(gx, gy, this.layout);
     const cy = sy + this.layout.tileH / 2;
 
-    // Gölge
     this.ctx.fillStyle = "rgba(0,0,0,0.5)";
     this.ctx.beginPath();
     this.ctx.ellipse(sx, cy + 2, 14, 6, 0, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Gövde
     this.ctx.fillStyle = color;
     this.ctx.fillRect(sx - 10, cy - 30, 20, 28);
     
-    // Kafa
     this.ctx.fillStyle = "#fed7aa";
     this.ctx.beginPath();
     this.ctx.arc(sx, cy - 38, 10, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // İsim Etiketi
     this.ctx.font = "bold 12px sans-serif";
     this.ctx.textAlign = "center";
     this.ctx.fillStyle = isMe ? "#facc15" : "#ffffff";
@@ -152,28 +163,22 @@ export class Engine {
       }
     }
 
-    // Derinlik sıralaması için tüm karakterleri bir diziye at
-    type Drawable = { gx: number, gy: number, draw: () => void };
+    type Drawable = { depth: number, draw: () => void };
     const chars: Drawable[] = [];
 
-    // Diğer oyuncuları ekle
     for (const p of this.otherPlayers) {
       chars.push({
-        gx: p.gx, gy: p.gy,
-        draw: () => this.drawCharacter(p.gx, p.gy, p.shirtColor, p.name, false)
+        depth: p.currGx + p.currGy,
+        draw: () => this.drawCharacter(p.currGx, p.currGy, p.shirtColor, p.name, false)
       });
     }
 
-    // Kendi karakterimizi ekle
     chars.push({
-      gx: this.me.gx, gy: this.me.gy,
+      depth: this.me.gx + this.me.gy + 0.1, // +0.1 kendi karakterimizi her zaman hafif önde tutar
       draw: () => this.drawCharacter(this.me.gx, this.me.gy, "#3b82f6", "SEN", true)
     });
 
-    // İzometrik derinliğe göre sırala (arkadakiler önce çizilsin)
-    chars.sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy));
-    
-    // Çiz
+    chars.sort((a, b) => a.depth - b.depth);
     for (const c of chars) c.draw();
   }
 }
