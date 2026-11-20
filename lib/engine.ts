@@ -175,22 +175,27 @@ export class Engine {
     return { gx, gy };
   }
 
-   private resize() {
+ private resize() {
     const parent = this.canvas.parentElement;
-    const w = parent?.clientWidth || 900;
-    const h = parent?.clientHeight || 600;
+    if (!parent) return;
+    
+    const w = parent.clientWidth;
+    const h = parent.clientHeight;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     
-    // Boyutları yuvarlayarak tam sayı yapıyoruz
+    // Ekran boyutlarını tam sayıya yuvarlıyoruz
     const targetW = Math.round(w * dpr);
     const targetH = Math.round(h * dpr);
 
-    // Sadece genişlik değil, YÜKSEKLİK de değişmişse yeniden boyutlandır
+    // Canvas'ın iç (çözünürlük) boyutu değiştiyse güncelle
     if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
       this.canvas.width = targetW;
       this.canvas.height = targetH;
+      
+      // Canvas'ın CSS boyutunu her zaman ebeveyn div'in boyutuna eşitle (Bu satır çok önemli!)
       this.canvas.style.width = `${w}px`;
       this.canvas.style.height = `${h}px`;
+      
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       this.layout = getLayout(w, h, COLS, ROWS);
     }
@@ -318,11 +323,12 @@ export class Engine {
     }
   }
 
-  private render() {
+    private render() {
     this.resize();
     const theme = ROOMS[this.currentRoom] || ROOMS["cadde-1"];
     
-    // Ekranı tamamen temizle (Ghosting'i önler)
+    // Canvas'ı tamamen temizle (Hayalet görüntüyü önler)
+    // DPR kullandığımız için temizlerken canvas'ın gerçek boyutlarını kullanıyoruz
     this.ctx.fillStyle = "#020617";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -330,7 +336,8 @@ export class Engine {
       for (let gx = 0; gx < COLS; gx++) {
         let tileColor = (gx + gy) % 2 === 0 ? theme.floorA : theme.floorB;
         // İskele'de sağ tarafı su yapalım
-        if (this.currentRoom === "iskele" && gx >= 14) {
+        if (this.currentRoom === "iskele" && gx >= 12) {
+
           tileColor = "#0284c7";
         }
         this.drawTile(gx, gy, tileColor, "#1e293b");
