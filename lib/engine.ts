@@ -32,18 +32,18 @@ export interface Npc {
   role: string;
 }
 
-const PORTALS: Record<string, { gx: number; gy: number; to: string; label: string }[]> = {
+const PORTALS: Record<string, { gx: number; gy: number; to: string; label: string; signGx: number; signGy: number }[]> = {
   "cadde-1": [
-    { gx: 0, gy: 6, to: "iskele", label: "Sahil İskelesi" },
-    { gx: 14, gy: 6, to: "restoran", label: "Sahil Restoranı" },
+    { gx: 0, gy: 6, to: "iskele", label: "Sahil İskelesi", signGx: 1, signGy: 6 },
+    { gx: 14, gy: 6, to: "restoran", label: "Sahil Restoranı", signGx: 13, signGy: 6 },
   ],
-  "iskele": [{ gx: 14, gy: 6, to: "cadde-1", label: "Cadde 1" }],
-  "restoran": [{ gx: 0, gy: 6, to: "cadde-1", label: "Cadde 1" }],
+  "iskele": [{ gx: 14, gy: 6, to: "cadde-1", label: "Cadde 1", signGx: 13, signGy: 6 }],
+  "restoran": [{ gx: 0, gy: 6, to: "cadde-1", label: "Cadde 1", signGx: 1, signGy: 6 }],
 };
 
 const NPCS: Npc[] = [
   { id: "npc_1", name: "Mert", gx: 5, gy: 5, color: "#ec4899", room: "cadde-1", role: "Rehber" },
-  { id: "npc_2", name: "Balıkçı Hasan", gx: 10, gy: 5, color: "#0e7490", room: "iskele", role: "Balıkçı" },
+  { id: "npc_2", name: "Balıkçı Hasan", gx: 12, gy: 5, color: "#0e7490", room: "iskele", role: "Balıkçı" },
   { id: "npc_3", name: "Şef Kemal", gx: 7, gy: 4, color: "#f8fafc", room: "restoran", role: "Aşçı" },
 ];
 
@@ -59,6 +59,7 @@ export class Engine {
 
   onPortalEnter: ((targetRoom: string) => void) | null = null;
   onNpcClick: ((npc: Npc) => void) | null = null;
+  onWaterClick: (() => void) | null = null; // YENİ: Suya tıklama
 
   private ctx: CanvasRenderingContext2D;
   private raf = 0;
@@ -145,7 +146,7 @@ export class Engine {
     }
   }
 
-  click(x: number, y: number): { gx: number, gy: number, isNpc?: boolean } | null {
+  click(x: number, y: number): { gx: number, gy: number, isNpc?: boolean, isWater?: boolean } | null {
     const rect = this.canvas.getBoundingClientRect();
     const { gx, gy } = screenToGrid(x - rect.left, y - rect.top, this.layout);
     if (!inGrid(gx, gy, COLS, ROWS)) return null;
@@ -154,6 +155,12 @@ export class Engine {
     if (npc) {
       if (this.onNpcClick) this.onNpcClick(npc);
       return { gx, gy, isNpc: true };
+    }
+
+    // İskele'de suya tıklanırsa (Sağ taraf)
+    if (this.currentRoom === "iskele" && gx >= 14) {
+      if (this.onWaterClick) this.onWaterClick();
+      return { gx, gy, isWater: true };
     }
 
     let cx = Math.round(this.me.gx);
@@ -199,21 +206,12 @@ export class Engine {
     this.ctx.stroke();
   }
 
-  private drawPortal(gx: number, gy: number, label: string) {
+  private drawPortal(gx: number, gy: number, label: string, signGx: number, signGy: number) {
     const { sx, sy } = gridToScreen(gx, gy, this.layout);
     const { tileW, tileH } = this.layout;
     const pulse = (Math.sin(Date.now() / 300) + 1) / 2;
     
-    // Yerdeki parlama ve ok
-    this.ctx.beginPath();
-    this.ctx.moveTo(sx, sy);
-    this.ctx.lineTo(sx + tileW / 2, sy + tileH / 2);
-    this.ctx.lineTo(sx, sy + tileH);
-    this.ctx.lineTo(sx - tileW / 2, sy + tileH / 2);
-    this.ctx.closePath();
-    this.ctx.fillStyle = `rgba(56, 189, 248, ${0.2 + pulse * 0.2})`;
-    this.ctx.fill();
-
+    // Orijinal Ok (Parlayan)
     this.ctx.save();
     this.ctx.translate(sx, sy + tileH / 2);
     this.ctx.beginPath();
@@ -229,34 +227,30 @@ export class Engine {
     this.ctx.fill();
     this.ctx.restore();
 
-    // HER ZAMAN GÖRÜNEN AHŞAP TABELA
+    // Yan Karedeki Tabela
+    const signPos = gridToScreen(signGx, signGy, this.layout);
     this.ctx.save();
-    this.ctx.font = "bold 12px sans-serif";
+    this.ctx.font = "bold 11px sans-serif";
     const tw = this.ctx.measureText(label).width;
-    const bw = tw + 20;
-    const bh = 24;
-    const bx = sx - bw / 2;
-    const by = sy - 15;
+    const bw = tw + 16;
+    const bh = 22;
+    const bx = signPos.sx - bw / 2;
+    const by = signPos.sy - 5;
 
-    // Ahşap Direk
-    this.ctx.fillStyle = "#78350f"; 
-    this.ctx.fillRect(sx - 3, by + bh, 6, 20);
+    this.ctx.fillStyle = "#78350f"; // Ahşap direk
+    this.ctx.fillRect(signPos.sx - 2, by + bh, 4, 15);
 
-    // Ahşap Pano
-    this.ctx.fillStyle = "#b45309"; 
+    this.ctx.fillStyle = "#b45309"; // Ahşap pano
     this.ctx.beginPath();
     this.ctx.roundRect(bx, by, bw, bh, 4);
     this.ctx.fill();
-    
-    // Çerçeve
     this.ctx.strokeStyle = "#451a03";
     this.ctx.lineWidth = 2;
     this.ctx.stroke();
 
-    // Yazı
     this.ctx.fillStyle = "#fef3c7";
     this.ctx.textAlign = "center";
-    this.ctx.fillText(label, sx, by + 16);
+    this.ctx.fillText(label, signPos.sx, by + 15);
     this.ctx.restore();
   }
 
@@ -327,12 +321,17 @@ export class Engine {
 
     for (let gy = 0; gy < ROWS; gy++) {
       for (let gx = 0; gx < COLS; gx++) {
-        this.drawTile(gx, gy, (gx + gy) % 2 === 0 ? theme.floorA : theme.floorB, "#1e293b");
+        let tileColor = (gx + gy) % 2 === 0 ? theme.floorA : theme.floorB;
+        // İskele'de sağ tarafı su yapalım
+        if (this.currentRoom === "iskele" && gx >= 14) {
+          tileColor = "#0284c7";
+        }
+        this.drawTile(gx, gy, tileColor, "#1e293b");
       }
     }
 
     const portals = PORTALS[this.currentRoom] || [];
-    for (const p of portals) this.drawPortal(p.gx, p.gy, p.label);
+    for (const p of portals) this.drawPortal(p.gx, p.gy, p.label, p.signGx, p.signGy);
 
     type Drawable = { depth: number, draw: () => void };
     const chars: Drawable[] = [];
