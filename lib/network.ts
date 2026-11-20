@@ -12,14 +12,21 @@ export interface PresenceState {
   role: string;
 }
 
+export interface ChatMessage {
+  id: string;
+  sender: string;
+  text: string;
+}
+
 export class RoomNetwork {
   private channel: RealtimeChannel;
-  private onPresence: (players: PresenceState[]) => void;
 
-  constructor(roomSlug: string, myId: string, onPresence: (players: PresenceState[]) => void) {
-    this.onPresence = onPresence;
-    
-    // Odaya özel bir kanal açıyoruz
+  constructor(
+    roomSlug: string, 
+    myId: string, 
+    onPresence: (players: PresenceState[]) => void,
+    onChat: (msg: ChatMessage) => void
+  ) {
     this.channel = supabase.channel(`room:${roomSlug}`, {
       config: { presence: { key: myId } },
     });
@@ -32,17 +39,31 @@ export class RoomNetwork {
           const p = state[id][0] as unknown as PresenceState;
           players.push(p);
         }
-        this.onPresence(players);
+        onPresence(players);
+      })
+      // Veritabanına yeni mesaj eklendiğinde dinle
+      .on("postgres_changes", { 
+        event: "INSERT", 
+        schema: "public", 
+        table: "messages", 
+        filter: `room=eq.${roomSlug}` 
+      }, (payload) => {
+        const newMsg = payload.new;
+        if (newMsg.kind === 'chat') {
+          onChat({
+            id: newMsg.id.toString(),
+            sender: newMsg.sender,
+            text: newMsg.text
+          });
+        }
       })
       .subscribe();
   }
 
-  // Kendi konumumuzu ve görünümümüzü yayınla
   track(state: PresenceState) {
     this.channel.track(state);
   }
 
-  // Odadan ayrıl
   leave() {
     this.channel.unsubscribe();
   }
