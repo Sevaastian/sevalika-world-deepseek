@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabase";
 import { ROOMS } from "@/lib/iso";
 import type { Profile } from "@/lib/types";
 
-// Envanter'deki kodları güzel isimlere çevirelim
 const ITEM_NAMES: Record<string, string> = {
   "fishing_rod": "🎣 Ahşap Olta",
   "fish_boot": "👢 Eski Çizme",
@@ -27,7 +26,7 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
   const [chatInput, setChatInput] = useState("");
   const [activeNpc, setActiveNpc] = useState<Npc | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
-  const [showBag, setShowBag] = useState(false); // Çanta Modalı
+  const [showBag, setShowBag] = useState(false);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -38,34 +37,19 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
     
     engine.onNpcClick = (npc) => setActiveNpc(npc);
 
-    // BALIK TUTMA OLAYI
+    // BALIK TUTMA OLAYI (Dikkat: async eklendi)
     engine.onWaterClick = async () => {
       if (currentRoom !== "iskele") return;
       
       setLoadingAction(true);
-      // Sunucuya balık tutma isteği gönder. Backend zaten olta kontrolünü yapıyor.
       const { data, error } = await supabase.rpc("catch_fish", { p_room: "iskele" });
       
       if (error) {
         alert("Hata: " + error.message);
       } else {
-        // Yakalanan balığı göster
         const fishName = ITEM_NAMES[data.item] || data.item;
         alert(`🎣 Oltaya bir şey takıldı!\nYakalanan: ${fishName}\nDeğeri: ${data.value} Sanil`);
-        onRefreshProfile(); // Envanteri güncelle
-      }
-      setLoadingAction(false);
-          };
-      // Sunucuya balık tutma isteği gönder
-      const { data, error } = await supabase.rpc("catch_fish", { p_room: "iskele" });
-      
-      if (error) {
-        alert("Hata: " + error.message);
-      } else {
-        // Yakalanan balığı göster
-        const fishName = ITEM_NAMES[data.item] || data.item;
-        alert(`🎣 Oltaya bir şey takıldı!\nYakalanan: ${fishName}\nDeğeri: ${data.value} Sanil`);
-        onRefreshProfile(); // Envanteri güncelle
+        onRefreshProfile();
       }
       setLoadingAction(false);
     };
@@ -185,7 +169,6 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
             <p className="text-xs text-slate-300 font-bold">📍 {ROOMS[currentRoom]?.name || currentRoom}</p>
             <p className="text-xs text-slate-300 font-bold">💰 {profile.coins} Sanil</p>
             
-            {/* ÇANTA BUTONU */}
             <button 
               onClick={() => setShowBag(true)}
               className="mt-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition"
@@ -201,7 +184,6 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
           </button>
         </div>
 
-        {/* ENVANTER (ÇANTA) MODALI */}
         {showBag && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl z-50 w-80 pointer-events-auto">
             <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
@@ -222,7 +204,6 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
           </div>
         )}
 
-        {/* NPC MODALI */}
         {activeNpc && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl z-50 w-80 pointer-events-auto">
             <div className="flex justify-between items-start mb-4">
