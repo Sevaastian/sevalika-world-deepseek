@@ -24,6 +24,7 @@ export interface ChatBubble {
 
 export class Engine {
   me = { gx: 7, gy: 6 };
+  myUsername = "SEN"; // Kendi kullanıcı adımızı burada tutacağız
   path: { gx: number, gy: number }[] = [];
   otherPlayers: RemotePlayer[] = [];
   bubbles: ChatBubble[] = [];
@@ -81,7 +82,6 @@ export class Engine {
       }
     }
 
-    // 5 saniyeden eski balonları temizle
     const now = Date.now();
     this.bubbles = this.bubbles.filter(b => now - b.createdAt < 5000);
   }
@@ -134,7 +134,9 @@ export class Engine {
     this.ctx.stroke();
   }
 
-  private drawCharacter(gx: number, gy: number, color: string, name: string, isMe: boolean) {
+  // displayName: Ekranda yazan isim (SEN veya arkadaşın adı)
+  // username: Sistemdeki gerçek adı (Balon eşleşmesi için)
+  private drawCharacter(gx: number, gy: number, color: string, displayName: string, username: string, isMe: boolean) {
     const { sx, sy } = gridToScreen(gx, gy, this.layout);
     const cy = sy + this.layout.tileH / 2;
 
@@ -156,11 +158,11 @@ export class Engine {
     this.ctx.fillStyle = isMe ? "#facc15" : "#ffffff";
     this.ctx.strokeStyle = "#000000";
     this.ctx.lineWidth = 3;
-    this.ctx.strokeText(name, sx, cy - 55);
-    this.ctx.fillText(name, sx, cy - 55);
+    this.ctx.strokeText(displayName, sx, cy - 55);
+    this.ctx.fillText(displayName, sx, cy - 55);
 
-    // --- KONUŞMA BALONU ÇİZİMİ ---
-    const bubble = this.bubbles.find(b => b.sender === name);
+    // BALON ÇİZİMİ (Gerçek username ile arıyoruz)
+    const bubble = this.bubbles.find(b => b.sender === username);
     if (bubble) {
       this.ctx.font = "14px sans-serif";
       const textWidth = this.ctx.measureText(bubble.text).width;
@@ -170,20 +172,17 @@ export class Engine {
       const bx = sx - bw / 2;
       const by = cy - 100;
 
-      // Balon arka planı (Beyaz)
       this.ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
       this.ctx.beginPath();
       this.ctx.roundRect(bx, by, bw, bh, 8);
       this.ctx.fill();
 
-      // Balonun altındaki üçgen (Kuyruk)
       this.ctx.beginPath();
       this.ctx.moveTo(sx - 6, by + bh);
       this.ctx.lineTo(sx + 6, by + bh);
       this.ctx.lineTo(sx, by + bh + 8);
       this.ctx.fill();
 
-      // Balon metni (Siyah)
       this.ctx.fillStyle = "#000000";
       this.ctx.textAlign = "center";
       this.ctx.fillText(bubble.text, sx, by + 20);
@@ -207,16 +206,16 @@ export class Engine {
     for (const p of this.otherPlayers) {
       chars.push({
         depth: p.currGx + p.currGy,
-        draw: () => this.drawCharacter(p.currGx, p.currGy, p.shirtColor, p.name, false)
+        draw: () => this.drawCharacter(p.currGx, p.currGy, p.shirtColor, p.name, p.name, false)
       });
     }
 
     chars.push({
       depth: this.me.gx + this.me.gy + 0.1,
-      draw: () => this.drawCharacter(this.me.gx, this.me.gy, "#3b82f6", "SEN", true)
+      draw: () => this.drawCharacter(this.me.gx, this.me.gy, "#3b82f6", "SEN", this.myUsername, true)
     });
 
     chars.sort((a, b) => a.depth - b.depth);
-    for (const c of chars) c.draw();
+    for (const c of chars) chars.draw();
   }
 }
