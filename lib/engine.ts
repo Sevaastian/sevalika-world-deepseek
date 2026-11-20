@@ -176,10 +176,9 @@ export class Engine {
 
   private resize() {
     const parent = this.canvas.parentElement;
-    if (!parent) return;
-    
-    const w = parent.clientWidth;
-    const h = parent.clientHeight;
+    // Eğer parent boyutu 0 gelirse direkt ekran boyutunu kullan
+    const w = parent?.clientWidth || window.innerWidth;
+    const h = parent?.clientHeight || window.innerHeight;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     
     const targetW = Math.round(w * dpr);
