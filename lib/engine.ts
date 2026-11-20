@@ -7,18 +7,26 @@ const WALK_SPEED = 4;
 export interface RemotePlayer {
   id: string;
   name: string;
-  gx: number; // Hedef X
-  gy: number; // Hedef Y
-  currGx: number; // Ekranda görünen anlık X (pürüzsüz yürüme için)
-  currGy: number; // Ekranda görünen anlık Y
+  gx: number;
+  gy: number;
+  currGx: number;
+  currGy: number;
   shirtColor: string;
   role: string;
+}
+
+export interface ChatBubble {
+  id: string;
+  sender: string;
+  text: string;
+  createdAt: number;
 }
 
 export class Engine {
   me = { gx: 7, gy: 6 };
   path: { gx: number, gy: number }[] = [];
   otherPlayers: RemotePlayer[] = [];
+  bubbles: ChatBubble[] = [];
 
   private ctx: CanvasRenderingContext2D;
   private raf = 0;
@@ -45,7 +53,6 @@ export class Engine {
   stop() { cancelAnimationFrame(this.raf); }
 
   private update(dt: number) {
-    // 1. Kendi karakterimizi yürüt
     let step = WALK_SPEED * dt;
     while (step > 0 && this.path.length > 0) {
       const next = this.path[0];
@@ -63,18 +70,20 @@ export class Engine {
       }
     }
 
-    // 2. Diğer oyuncuları pürüzsüzce hedeflerine yürüt (Işınlanmayı önler)
     for (const p of this.otherPlayers) {
       const dx = p.gx - p.currGx;
       const dy = p.gy - p.currGy;
       const dist = Math.hypot(dx, dy);
-      
       if (dist > 0.05) {
         const step2 = Math.min(dist, WALK_SPEED * dt);
         p.currGx += (dx / dist) * step2;
         p.currGy += (dy / dist) * step2;
       }
     }
+
+    // 5 saniyeden eski balonları temizle
+    const now = Date.now();
+    this.bubbles = this.bubbles.filter(b => now - b.createdAt < 5000);
   }
 
   click(x: number, y: number): { gx: number, gy: number } | null {
@@ -99,7 +108,6 @@ export class Engine {
     const w = parent?.clientWidth || 900;
     const h = parent?.clientHeight || 600;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    
     if (this.canvas.width !== w * dpr) {
       this.canvas.width = w * dpr;
       this.canvas.height = h * dpr;
@@ -150,6 +158,36 @@ export class Engine {
     this.ctx.lineWidth = 3;
     this.ctx.strokeText(name, sx, cy - 55);
     this.ctx.fillText(name, sx, cy - 55);
+
+    // --- KONUŞMA BALONU ÇİZİMİ ---
+    const bubble = this.bubbles.find(b => b.sender === name);
+    if (bubble) {
+      this.ctx.font = "14px sans-serif";
+      const textWidth = this.ctx.measureText(bubble.text).width;
+      const padding = 10;
+      const bw = textWidth + padding * 2;
+      const bh = 30;
+      const bx = sx - bw / 2;
+      const by = cy - 100;
+
+      // Balon arka planı (Beyaz)
+      this.ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+      this.ctx.beginPath();
+      this.ctx.roundRect(bx, by, bw, bh, 8);
+      this.ctx.fill();
+
+      // Balonun altındaki üçgen (Kuyruk)
+      this.ctx.beginPath();
+      this.ctx.moveTo(sx - 6, by + bh);
+      this.ctx.lineTo(sx + 6, by + bh);
+      this.ctx.lineTo(sx, by + bh + 8);
+      this.ctx.fill();
+
+      // Balon metni (Siyah)
+      this.ctx.fillStyle = "#000000";
+      this.ctx.textAlign = "center";
+      this.ctx.fillText(bubble.text, sx, by + 20);
+    }
   }
 
   private render() {
@@ -174,7 +212,7 @@ export class Engine {
     }
 
     chars.push({
-      depth: this.me.gx + this.me.gy + 0.1, // +0.1 kendi karakterimizi her zaman hafif önde tutar
+      depth: this.me.gx + this.me.gy + 0.1,
       draw: () => this.drawCharacter(this.me.gx, this.me.gy, "#3b82f6", "SEN", true)
     });
 
