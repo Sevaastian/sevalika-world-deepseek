@@ -175,14 +175,20 @@ export class Engine {
     return { gx, gy };
   }
 
-  private resize() {
+   private resize() {
     const parent = this.canvas.parentElement;
     const w = parent?.clientWidth || 900;
     const h = parent?.clientHeight || 600;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    if (this.canvas.width !== w * dpr) {
-      this.canvas.width = w * dpr;
-      this.canvas.height = h * dpr;
+    
+    // Boyutları yuvarlayarak tam sayı yapıyoruz
+    const targetW = Math.round(w * dpr);
+    const targetH = Math.round(h * dpr);
+
+    // Sadece genişlik değil, YÜKSEKLİK de değişmişse yeniden boyutlandır
+    if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+      this.canvas.width = targetW;
+      this.canvas.height = targetH;
       this.canvas.style.width = `${w}px`;
       this.canvas.style.height = `${h}px`;
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -316,8 +322,9 @@ export class Engine {
     this.resize();
     const theme = ROOMS[this.currentRoom] || ROOMS["cadde-1"];
     
+    // Ekranı tamamen temizle (Ghosting'i önler)
     this.ctx.fillStyle = "#020617";
-    this.ctx.fillRect(0, 0, this.layout.width, this.layout.height);
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     for (let gy = 0; gy < ROWS; gy++) {
       for (let gx = 0; gx < COLS; gx++) {
