@@ -22,7 +22,6 @@ export interface ChatBubble {
   createdAt: number;
 }
 
-// NPC (Karakter) Tipleri
 export interface Npc {
   id: string;
   name: string;
@@ -33,7 +32,6 @@ export interface Npc {
   role: string;
 }
 
-// Kapılar
 const PORTALS: Record<string, { gx: number; gy: number; to: string; label: string }[]> = {
   "cadde-1": [
     { gx: 0, gy: 6, to: "iskele", label: "Sahil İskelesi" },
@@ -43,11 +41,10 @@ const PORTALS: Record<string, { gx: number; gy: number; to: string; label: strin
   "restoran": [{ gx: 0, gy: 6, to: "cadde-1", label: "Cadde 1" }],
 };
 
-// Haritadaki NPC'ler (Şimdilik sabit yerlerde)
 const NPCS: Npc[] = [
-  { id: "npc_1", name: "Oyunika Mert", gx: 5, gy: 5, color: "#ec4899", room: "cadde-1", role: "🎲 Oyunika" },
-  { id: "npc_2", name: "Balıkçı Hasan", gx: 10, gy: 5, color: "#0e7490", room: "iskele", role: "🎣 Balıkçı" },
-  { id: "npc_3", name: "Şef Kemal", gx: 7, gy: 4, color: "#f8fafc", room: "restoran", role: "🍳 Aşçı" },
+  { id: "npc_1", name: "Mert", gx: 5, gy: 5, color: "#ec4899", room: "cadde-1", role: "Rehber" },
+  { id: "npc_2", name: "Balıkçı Hasan", gx: 10, gy: 5, color: "#0e7490", room: "iskele", role: "Balıkçı" },
+  { id: "npc_3", name: "Şef Kemal", gx: 7, gy: 4, color: "#f8fafc", room: "restoran", role: "Aşçı" },
 ];
 
 export class Engine {
@@ -153,11 +150,10 @@ export class Engine {
     const { gx, gy } = screenToGrid(x - rect.left, y - rect.top, this.layout);
     if (!inGrid(gx, gy, COLS, ROWS)) return null;
 
-    // NPC'ye mi tıkladık?
     const npc = NPCS.find(n => n.room === this.currentRoom && n.gx === gx && n.gy === gy);
     if (npc) {
       if (this.onNpcClick) this.onNpcClick(npc);
-      return { gx, gy, isNpc: true }; // NPC'ye tıklayınca yürümesin
+      return { gx, gy, isNpc: true };
     }
 
     let cx = Math.round(this.me.gx);
@@ -208,11 +204,18 @@ export class Engine {
     const { tileW, tileH } = this.layout;
     const pulse = (Math.sin(Date.now() / 300) + 1) / 2;
     
-    // Yere çizilen ok (İzometrik perspektife uygun)
+    // Yerdeki parlama ve ok
+    this.ctx.beginPath();
+    this.ctx.moveTo(sx, sy);
+    this.ctx.lineTo(sx + tileW / 2, sy + tileH / 2);
+    this.ctx.lineTo(sx, sy + tileH);
+    this.ctx.lineTo(sx - tileW / 2, sy + tileH / 2);
+    this.ctx.closePath();
+    this.ctx.fillStyle = `rgba(56, 189, 248, ${0.2 + pulse * 0.2})`;
+    this.ctx.fill();
+
     this.ctx.save();
     this.ctx.translate(sx, sy + tileH / 2);
-    
-    // Okun yönü (kapı neredeyse oraya doğru, şimdilik hepsi aynı yön)
     this.ctx.beginPath();
     this.ctx.moveTo(0, 8);
     this.ctx.lineTo(-12, -6);
@@ -222,41 +225,39 @@ export class Engine {
     this.ctx.lineTo(4, -6);
     this.ctx.lineTo(12, -6);
     this.ctx.closePath();
-    
     this.ctx.fillStyle = `rgba(56, 189, 248, ${0.5 + pulse * 0.5})`;
     this.ctx.fill();
-    this.ctx.strokeStyle = "#38bdf8";
-    this.ctx.lineWidth = 2;
-    this.ctx.stroke();
     this.ctx.restore();
 
-    // Eğer fare bu portalın üzerindeyse, havada tabela göster
-    if (this.hoverTile && this.hoverTile.gx === gx && this.hoverTile.gy === gy) {
-      this.ctx.save();
-      this.ctx.font = "bold 14px sans-serif";
-      const tw = this.ctx.measureText(label).width;
-      const bw = tw + 24;
-      const bh = 32;
-      const bx = sx - bw / 2;
-      const by = sy - 20; // Havada süzülüyor
+    // HER ZAMAN GÖRÜNEN AHŞAP TABELA
+    this.ctx.save();
+    this.ctx.font = "bold 12px sans-serif";
+    const tw = this.ctx.measureText(label).width;
+    const bw = tw + 20;
+    const bh = 24;
+    const bx = sx - bw / 2;
+    const by = sy - 15;
 
-      // Tabela Arka Planı
-      this.ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
-      this.ctx.beginPath();
-      this.ctx.roundRect(bx, by, bw, bh, 8);
-      this.ctx.fill();
-      
-      // Tabela Çerçevesi
-      this.ctx.strokeStyle = "#38bdf8";
-      this.ctx.lineWidth = 2;
-      this.ctx.stroke();
+    // Ahşap Direk
+    this.ctx.fillStyle = "#78350f"; 
+    this.ctx.fillRect(sx - 3, by + bh, 6, 20);
 
-      // Tabela Metni
-      this.ctx.fillStyle = "#ffffff";
-      this.ctx.textAlign = "center";
-      this.ctx.fillText(label, sx, by + 21);
-      this.ctx.restore();
-    }
+    // Ahşap Pano
+    this.ctx.fillStyle = "#b45309"; 
+    this.ctx.beginPath();
+    this.ctx.roundRect(bx, by, bw, bh, 4);
+    this.ctx.fill();
+    
+    // Çerçeve
+    this.ctx.strokeStyle = "#451a03";
+    this.ctx.lineWidth = 2;
+    this.ctx.stroke();
+
+    // Yazı
+    this.ctx.fillStyle = "#fef3c7";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText(label, sx, by + 16);
+    this.ctx.restore();
   }
 
   private drawCharacter(gx: number, gy: number, color: string, displayName: string, username: string, isMe: boolean, subText?: string) {
@@ -336,7 +337,6 @@ export class Engine {
     type Drawable = { depth: number, draw: () => void };
     const chars: Drawable[] = [];
 
-    // NPC'leri çiz
     const npcs = NPCS.filter(n => n.room === this.currentRoom);
     for (const n of npcs) {
       chars.push({
@@ -345,7 +345,6 @@ export class Engine {
       });
     }
 
-    // Diğer oyuncuları çiz
     for (const p of this.otherPlayers) {
       chars.push({
         depth: p.currGx + p.currGy,
@@ -353,7 +352,6 @@ export class Engine {
       });
     }
 
-    // Kendi karakterimizi çiz
     chars.push({
       depth: this.me.gx + this.me.gy + 0.1,
       draw: () => this.drawCharacter(this.me.gx, this.me.gy, "#3b82f6", "SEN", this.myUsername, true)
