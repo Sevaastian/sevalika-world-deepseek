@@ -4,10 +4,19 @@ const COLS = 15;
 const ROWS = 12;
 const WALK_SPEED = 4;
 
+export interface RemotePlayer {
+  id: string;
+  name: string;
+  gx: number;
+  gy: number;
+  shirtColor: string;
+  role: string;
+}
+
 export class Engine {
   me = { gx: 7, gy: 6 };
   path: { gx: number, gy: number }[] = [];
-  hover: { gx: number, gy: number } | null = null;
+  otherPlayers: RemotePlayer[] = [];
 
   private ctx: CanvasRenderingContext2D;
   private raf = 0;
@@ -52,12 +61,11 @@ export class Engine {
     }
   }
 
-  click(x: number, y: number) {
+  click(x: number, y: number): { gx: number, gy: number } | null {
     const rect = this.canvas.getBoundingClientRect();
     const { gx, gy } = screenToGrid(x - rect.left, y - rect.top, this.layout);
-    if (!inGrid(gx, gy, COLS, ROWS)) return;
+    if (!inGrid(gx, gy, COLS, ROWS)) return null;
 
-    // Basit yürüme yolu
     let cx = Math.round(this.me.gx);
     let cy = Math.round(this.me.gy);
     const steps = [];
@@ -67,6 +75,7 @@ export class Engine {
       steps.push({ gx: cx, gy: cy });
     }
     this.path = steps;
+    return { gx, gy }; // Tıklanan hedefi döndür (ağa göndermek için)
   }
 
   private resize() {
@@ -101,6 +110,37 @@ export class Engine {
     this.ctx.stroke();
   }
 
+  // Karakter çizim fonksiyonu (Hem kendimiz hem diğerleri için)
+  private drawCharacter(gx: number, gy: number, color: string, name: string, isMe: boolean) {
+    const { sx, sy } = gridToScreen(gx, gy, this.layout);
+    const cy = sy + this.layout.tileH / 2;
+
+    // Gölge
+    this.ctx.fillStyle = "rgba(0,0,0,0.5)";
+    this.ctx.beginPath();
+    this.ctx.ellipse(sx, cy + 2, 14, 6, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Gövde
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(sx - 10, cy - 30, 20, 28);
+    
+    // Kafa
+    this.ctx.fillStyle = "#fed7aa";
+    this.ctx.beginPath();
+    this.ctx.arc(sx, cy - 38, 10, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // İsim Etiketi
+    this.ctx.font = "bold 12px sans-serif";
+    this.ctx.textAlign = "center";
+    this.ctx.fillStyle = isMe ? "#facc15" : "#ffffff";
+    this.ctx.strokeStyle = "#000000";
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeText(name, sx, cy - 55);
+    this.ctx.fillText(name, sx, cy - 55);
+  }
+
   private render() {
     this.resize();
     this.ctx.fillStyle = "#020617";
@@ -112,21 +152,28 @@ export class Engine {
       }
     }
 
-    // Karakter
-    const { sx, sy } = gridToScreen(this.me.gx, this.me.gy, this.layout);
-    const cy = sy + this.layout.tileH / 2;
-    
-    this.ctx.fillStyle = "rgba(0,0,0,0.5)";
-    this.ctx.beginPath();
-    this.ctx.ellipse(sx, cy + 2, 14, 6, 0, 0, Math.PI * 2);
-    this.ctx.fill();
+    // Derinlik sıralaması için tüm karakterleri bir diziye at
+    type Drawable = { gx: number, gy: number, draw: () => void };
+    const chars: Drawable[] = [];
 
-    this.ctx.fillStyle = "#3b82f6";
-    this.ctx.fillRect(sx - 10, cy - 30, 20, 28); // Gövde
+    // Diğer oyuncuları ekle
+    for (const p of this.otherPlayers) {
+      chars.push({
+        gx: p.gx, gy: p.gy,
+        draw: () => this.drawCharacter(p.gx, p.gy, p.shirtColor, p.name, false)
+      });
+    }
+
+    // Kendi karakterimizi ekle
+    chars.push({
+      gx: this.me.gx, gy: this.me.gy,
+      draw: () => this.drawCharacter(this.me.gx, this.me.gy, "#3b82f6", "SEN", true)
+    });
+
+    // İzometrik derinliğe göre sırala (arkadakiler önce çizilsin)
+    chars.sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy));
     
-    this.ctx.fillStyle = "#fed7aa";
-    this.ctx.beginPath();
-    this.ctx.arc(sx, cy - 38, 10, 0, Math.PI * 2);
-    this.ctx.fill();
+    // Çiz
+    for (const c of chars) c.draw();
   }
 }
