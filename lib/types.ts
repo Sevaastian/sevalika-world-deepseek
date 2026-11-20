@@ -7,4 +7,6 @@ export interface Profile {
   hairColor: string;
   skinColor: string;
   room: string | null;
+  inventory: string[]; // Envanter eklendi
+  tool: string | null; // Kuşanılan alet eklendi
 }
