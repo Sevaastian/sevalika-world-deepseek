@@ -17,12 +17,12 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
     if (!canvasRef.current) return;
     
     const engine = new Engine(canvasRef.current);
+    engine.myUsername = profile.username; // Motorun kendi adımızı bilmesini sağla
     engineRef.current = engine;
     engine.start();
 
     const room = "cadde-1";
     
-    // DİKKAT: Burada RoomNetwork'e 4 parametre gidiyor. (oda, id, oyuncular, mesajlar)
     const net = new RoomNetwork(
       room, 
       profile.id, 
@@ -47,6 +47,7 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
         setOnlineCount(players.length);
       },
       (msg: ChatMessage) => {
+        // Başkasından gelen mesaj
         if (engineRef.current) {
           engineRef.current.bubbles.push({
             id: msg.id,
@@ -82,6 +83,17 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
     const text = chatInput.trim();
     setChatInput("");
 
+    // 1. Anında kendi ekranımızda balonu göster (Optimistic UI)
+    if (engineRef.current) {
+      engineRef.current.bubbles.push({
+        id: Math.random().toString(),
+        sender: profile.username,
+        text: text,
+        createdAt: Date.now()
+      });
+    }
+
+    // 2. Veritabanına gönder (Diğerleri görecek)
     const { error } = await supabase.rpc("send_chat", {
       p_room: "cadde-1",
       p_text: text
