@@ -41,12 +41,21 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
     // BALIK TUTMA OLAYI
     engine.onWaterClick = async () => {
       if (currentRoom !== "iskele") return;
-      if (!profile.inventory.includes("fishing_rod")) {
-        alert("Balık tutmak için önce Balıkçı Hasan'dan olta almalısın!");
-        return;
-      }
       
       setLoadingAction(true);
+      // Sunucuya balık tutma isteği gönder. Backend zaten olta kontrolünü yapıyor.
+      const { data, error } = await supabase.rpc("catch_fish", { p_room: "iskele" });
+      
+      if (error) {
+        alert("Hata: " + error.message);
+      } else {
+        // Yakalanan balığı göster
+        const fishName = ITEM_NAMES[data.item] || data.item;
+        alert(`🎣 Oltaya bir şey takıldı!\nYakalanan: ${fishName}\nDeğeri: ${data.value} Sanil`);
+        onRefreshProfile(); // Envanteri güncelle
+      }
+      setLoadingAction(false);
+          };
       // Sunucuya balık tutma isteği gönder
       const { data, error } = await supabase.rpc("catch_fish", { p_room: "iskele" });
       
