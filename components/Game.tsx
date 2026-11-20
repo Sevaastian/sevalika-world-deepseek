@@ -59,6 +59,10 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
       engine.setRoom(targetRoom);
       setCurrentRoom(targetRoom);
       setActiveNpc(null);
+      
+      // YENİ ODADAKİ KONUMUMUZU SUNUCUYA BİLDİR (İskele'de balık tutabilmek için şart)
+      await supabase.rpc("report_pos", { p_room: targetRoom, p_gx: 7, p_gy: 6 });
+
       connectToNetwork(engine, targetRoom);
     };
 
