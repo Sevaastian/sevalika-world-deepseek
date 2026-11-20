@@ -42,7 +42,7 @@ export default function AuthScreen({ onAuthed }: { onAuthed: (p: Profile) => voi
       const { data: profileData, error: profileError } = await supabase.rpc("get_my_profile");
       if (profileError) throw profileError;
 
-      // 3. Başarılıysa Oyuna Geç
+            // 3. Başarılıysa Oyuna Geç
       onAuthed({
         id: profileData.id,
         username: profileData.username,
@@ -51,7 +51,9 @@ export default function AuthScreen({ onAuthed }: { onAuthed: (p: Profile) => voi
         shirtColor: profileData.shirt_color,
         hairColor: profileData.hair_color,
         skinColor: profileData.skin_color,
-        room: profileData.room
+        room: profileData.room,
+        inventory: profileData.inventory || [], // <-- Eklendi
+        tool: profileData.tool || null          // <-- Eklendi
       });
 
     } catch (err: any) {
