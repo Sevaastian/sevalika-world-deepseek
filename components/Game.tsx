@@ -6,6 +6,17 @@ import { supabase } from "@/lib/supabase";
 import { ROOMS } from "@/lib/iso";
 import type { Profile } from "@/lib/types";
 
+// Envanter'deki kodları güzel isimlere çevirelim
+const ITEM_NAMES: Record<string, string> = {
+  "fishing_rod": "🎣 Ahşap Olta",
+  "fish_boot": "👢 Eski Çizme",
+  "fish_hamsi": "🐟 Hamsi",
+  "fish_cipura": "🐠 Çipura",
+  "fish_levrek": "🐡 Levrek",
+  "fish_shark": "🦈 Köpekbalığı",
+  "fish_treasure": "💎 Batık Hazine",
+};
+
 export default function Game({ profile, onLogout, onRefreshProfile }: { profile: Profile, onLogout: () => void, onRefreshProfile: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
@@ -16,6 +27,7 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
   const [chatInput, setChatInput] = useState("");
   const [activeNpc, setActiveNpc] = useState<Npc | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [showBag, setShowBag] = useState(false); // Çanta Modalı
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -25,6 +37,29 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
     engine.currentRoom = currentRoom;
     
     engine.onNpcClick = (npc) => setActiveNpc(npc);
+
+    // BALIK TUTMA OLAYI
+    engine.onWaterClick = async () => {
+      if (currentRoom !== "iskele") return;
+      if (!profile.inventory.includes("fishing_rod")) {
+        alert("Balık tutmak için önce Balıkçı Hasan'dan olta almalısın!");
+        return;
+      }
+      
+      setLoadingAction(true);
+      // Sunucuya balık tutma isteği gönder
+      const { data, error } = await supabase.rpc("catch_fish", { p_room: "iskele" });
+      
+      if (error) {
+        alert("Hata: " + error.message);
+      } else {
+        // Yakalanan balığı göster
+        const fishName = ITEM_NAMES[data.item] || data.item;
+        alert(`🎣 Oltaya bir şey takıldı!\nYakalanan: ${fishName}\nDeğeri: ${data.value} Sanil`);
+        onRefreshProfile(); // Envanteri güncelle
+      }
+      setLoadingAction(false);
+    };
 
     engine.onPortalEnter = async (targetRoom: string) => {
       netRef.current?.leave();
@@ -43,7 +78,7 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
       netRef.current?.leave();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile]);
+  }, [profile, currentRoom]);
 
   const connectToNetwork = (engine: Engine, roomSlug: string) => {
     const net = new RoomNetwork(
@@ -88,14 +123,13 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
     await supabase.rpc("send_chat", { p_room: currentRoom, p_text: text });
   };
 
-  // --- NPC İŞLEMLERİ ---
   const buyRod = async () => {
     setLoadingAction(true);
     const { error } = await supabase.rpc("buy_fishing_rod");
     if (error) alert("Hata: " + error.message);
     else {
-      alert("🎣 Olta alındı ve kuşandın! İskeleye gidip denize tıklayabilirsin.");
-      onRefreshProfile(); // Parayı ve envanteri güncelle
+      alert("🎣 Olta alındı ve kuşandın! İskele'nin sağındaki suya tıklayabilirsin.");
+      onRefreshProfile();
       setActiveNpc(null);
     }
     setLoadingAction(false);
@@ -103,12 +137,12 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
 
   const sellFish = async () => {
     setLoadingAction(true);
-    // p_item null göndererek çantadaki tüm balıkları satmasını istiyoruz
     const { data, error } = await supabase.rpc("sell_fish", { p_item: null }); 
     if (error) alert("Hata: " + error.message);
     else {
       alert(`💰 Satış başarılı! \nKazanç: ${data.earned} Sanil \nSatılan: ${data.sold} balık`);
       onRefreshProfile();
+      setActiveNpc(null);
     }
     setLoadingAction(false);
   };
@@ -124,7 +158,7 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
           onClick={(e) => {
             if (!engineRef.current || !netRef.current) return;
             const target = engineRef.current.click(e.clientX, e.clientY);
-            if (target && !target.isNpc) {
+            if (target && !target.isNpc && !target.isWater) {
               netRef.current.track({
                 id: profile.id, name: profile.username, gx: target.gx, gy: target.gy,
                 shirtColor: profile.shirtColor, hairColor: profile.hairColor, skinColor: profile.skinColor, role: profile.role
@@ -134,20 +168,52 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
         />
         
         <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
-          <div className="bg-slate-900/80 backdrop-blur-md p-4 rounded-xl border border-slate-700 text-white pointer-events-auto flex flex-col gap-1">
+          <div className="bg-slate-900/80 backdrop-blur-md p-4 rounded-xl border border-slate-700 text-white pointer-events-auto flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <h1 className="font-black text-yellow-400 text-lg uppercase tracking-wide">{profile.username}</h1>
               <span className="bg-slate-800 text-[10px] px-2 py-0.5 rounded text-slate-300">{profile.role}</span>
             </div>
             <p className="text-xs text-slate-300 font-bold">📍 {ROOMS[currentRoom]?.name || currentRoom}</p>
             <p className="text-xs text-slate-300 font-bold">💰 {profile.coins} Sanil</p>
+            
+            {/* ÇANTA BUTONU */}
+            <button 
+              onClick={() => setShowBag(true)}
+              className="mt-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition"
+            >
+              🎒 Çantayı Aç
+            </button>
+
             <p className="text-[10px] text-green-400 font-bold mt-1">🟢 {onlineCount} Çevrimiçi</p>
           </div>
+
           <button onClick={onLogout} className="bg-red-500/20 hover:bg-red-500/40 border border-red-500/50 text-red-200 px-4 py-2 rounded-xl text-sm font-bold backdrop-blur-md transition pointer-events-auto">
             Çıkış Yap
           </button>
         </div>
 
+        {/* ENVANTER (ÇANTA) MODALI */}
+        {showBag && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl z-50 w-80 pointer-events-auto">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+              <h2 className="text-lg font-black text-white">🎒 Çantan</h2>
+              <button onClick={() => setShowBag(false)} className="text-slate-400 hover:text-white bg-slate-800 px-2 py-1 rounded-md text-xs font-bold">✕ Kapat</button>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {profile.inventory.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">Çantan şu an bomboş.</p>
+              ) : (
+                profile.inventory.map((item, idx) => (
+                  <div key={idx} className="bg-slate-800 p-2 rounded-lg flex justify-between items-center text-sm">
+                    <span className="text-white font-bold">{ITEM_NAMES[item] || item}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* NPC MODALI */}
         {activeNpc && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl z-50 w-80 pointer-events-auto">
             <div className="flex justify-between items-start mb-4">
