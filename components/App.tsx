@@ -9,19 +9,21 @@ export default function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [booting, setBooting] = useState(true);
 
+  const fetchProfile = async () => {
+    const { data } = await supabase.rpc("get_my_profile");
+    if (data) {
+      setProfile({
+        id: data.id, username: data.username, role: data.role, coins: data.coins,
+        shirtColor: data.shirt_color, hairColor: data.hair_color, skinColor: data.skin_color, room: data.room,
+        inventory: data.inventory || [], tool: data.tool || null
+      });
+    }
+  };
+
   useEffect(() => {
-    // Sayfa yenilendiğinde oturum açık mı diye kontrol et
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        supabase.rpc("get_my_profile").then(({ data }) => {
-          if (data) {
-            setProfile({
-              id: data.id, username: data.username, role: data.role, coins: data.coins,
-              shirtColor: data.shirt_color, hairColor: data.hair_color, skinColor: data.skin_color, room: data.room
-            });
-          }
-          setBooting(false);
-        });
+        fetchProfile().finally(() => setBooting(false));
       } else {
         setBooting(false);
       }
@@ -34,5 +36,5 @@ export default function App() {
 
   if (!profile) return <AuthScreen onAuthed={setProfile} />;
   
-  return <Game profile={profile} onLogout={() => { supabase.auth.signOut(); setProfile(null); }} />;
+  return <Game profile={profile} onRefreshProfile={fetchProfile} onLogout={() => { supabase.auth.signOut(); setProfile(null); }} />;
 }
