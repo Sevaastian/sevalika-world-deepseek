@@ -1,2 +1,5 @@
-import Game from "@/components/Game";
-export default function Home() { return <Game />; }
+import App from "@/components/App";
+
+export default function Home() {
+  return <App />;
+}
