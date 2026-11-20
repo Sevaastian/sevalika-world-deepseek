@@ -144,9 +144,9 @@ export default function Game({ profile, onLogout, onRefreshProfile }: { profile:
     setLoadingAction(false);
   };
 
-  return (
-    <div className="relative w-full h-[100dvh] bg-slate-950 overflow-hidden flex flex-col">
-      <div className="relative flex-1">
+   return (
+    <div className="w-full h-screen bg-slate-950 overflow-hidden flex flex-col">
+      <div className="relative w-full flex-1 min-h-0">
         <canvas
           ref={canvasRef}
           className="absolute inset-0 cursor-pointer"
