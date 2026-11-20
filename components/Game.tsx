@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Engine } from "@/lib/engine";
 import { RoomNetwork, type ChatMessage } from "@/lib/network";
 import { supabase } from "@/lib/supabase";
+import { ROOMS } from "@/lib/iso";
 import type { Profile } from "@/lib/types";
 
 export default function Game({ profile, onLogout }: { profile: Profile, onLogout: () => void }) {
@@ -10,6 +11,7 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
   const engineRef = useRef<Engine | null>(null);
   const netRef = useRef<RoomNetwork | null>(null);
   
+  const [currentRoom, setCurrentRoom] = useState("cadde-1");
   const [onlineCount, setOnlineCount] = useState(1);
   const [chatInput, setChatInput] = useState("");
 
@@ -17,14 +19,39 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
     if (!canvasRef.current) return;
     
     const engine = new Engine(canvasRef.current);
-    engine.myUsername = profile.username; // Motorun kendi adımızı bilmesini sağla
+    engine.myUsername = profile.username;
+    engine.currentRoom = currentRoom;
+    
+    // PORTAL MANTIĞI: Karakter kapıya yürüdüğünde tetiklenir
+    engine.onPortalEnter = async (targetRoom: string) => {
+      // 1. Ağdan eski odadan ayrıl
+      netRef.current?.leave();
+      
+      // 2. Ekranı temizle, yeni odaya geç
+      engine.setRoom(targetRoom);
+      setCurrentRoom(targetRoom);
+      
+      // 3. Yeni odaya ağdan bağlan
+      connectToNetwork(engine, targetRoom);
+    };
+
     engineRef.current = engine;
     engine.start();
 
-    const room = "cadde-1";
-    
+    // İlk bağlantıyı kur
+    connectToNetwork(engine, currentRoom);
+
+    return () => {
+      engine.stop();
+      netRef.current?.leave();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile]);
+
+  // Ağa bağlanma fonksiyonunu ayırdık (Oda değişince tekrar kullanacağız)
+  const connectToNetwork = (engine: Engine, roomSlug: string) => {
     const net = new RoomNetwork(
-      room, 
+      roomSlug, 
       profile.id, 
       (players) => {
         const others = players.filter(p => p.id !== profile.id);
@@ -47,7 +74,6 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
         setOnlineCount(players.length);
       },
       (msg: ChatMessage) => {
-        // Başkasından gelen mesaj
         if (engineRef.current) {
           engineRef.current.bubbles.push({
             id: msg.id,
@@ -69,12 +95,7 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
       skinColor: profile.skinColor,
       role: profile.role
     });
-
-    return () => {
-      engine.stop();
-      net.leave();
-    };
-  }, [profile]);
+  };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +104,6 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
     const text = chatInput.trim();
     setChatInput("");
 
-    // 1. Anında kendi ekranımızda balonu göster (Optimistic UI)
     if (engineRef.current) {
       engineRef.current.bubbles.push({
         id: Math.random().toString(),
@@ -93,9 +113,8 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
       });
     }
 
-    // 2. Veritabanına gönder (Diğerleri görecek)
     const { error } = await supabase.rpc("send_chat", {
-      p_room: "cadde-1",
+      p_room: currentRoom, // Bulunduğumuz odaya gönder
       p_text: text
     });
 
@@ -134,6 +153,7 @@ export default function Game({ profile, onLogout }: { profile: Profile, onLogout
               <h1 className="font-black text-yellow-400 text-lg uppercase tracking-wide">{profile.username}</h1>
               <span className="bg-slate-800 text-[10px] px-2 py-0.5 rounded text-slate-300">{profile.role}</span>
             </div>
+            <p className="text-xs text-slate-300 font-bold">📍 {ROOMS[currentRoom]?.name || currentRoom}</p>
             <p className="text-xs text-slate-300 font-bold">💰 {profile.coins} Sanil</p>
             <p className="text-[10px] text-green-400 font-bold mt-1">🟢 {onlineCount} Çevrimiçi</p>
           </div>
