@@ -1,4 +1,4 @@
-import { getLayout, gridToScreen, screenToGrid, inGrid, type Layout } from "./iso";
+import { getLayout, gridToScreen, screenToGrid, inGrid, type Layout, ROOMS } from "./iso";
 
 const COLS = 15;
 const ROWS = 12;
@@ -22,12 +22,27 @@ export interface ChatBubble {
   createdAt: number;
 }
 
+// Kapıların koordinatları (Hangi kareye basınca nereye gidilecek)
+const PORTALS: Record<string, { gx: number; gy: number; to: string; label: string }[]> = {
+  "cadde-1": [
+    { gx: 0, gy: 6, to: "iskele", label: "İskele" },
+    { gx: 14, gy: 6, to: "restoran", label: "Restoran" },
+  ],
+  "iskele": [{ gx: 14, gy: 6, to: "cadde-1", label: "Cadde 1" }],
+  "restoran": [{ gx: 0, gy: 6, to: "cadde-1", label: "Cadde 1" }],
+  "maden": [{ gx: 7, gy: 11, to: "cadde-1", label: "Cadde 1" }],
+};
+
 export class Engine {
   me = { gx: 7, gy: 6 };
-  myUsername = "SEN"; // Kendi kullanıcı adımızı burada tutacağız
+  myUsername = "SEN";
+  currentRoom = "cadde-1";
   path: { gx: number, gy: number }[] = [];
   otherPlayers: RemotePlayer[] = [];
   bubbles: ChatBubble[] = [];
+  
+  // Odaya girince tetiklenecek callback
+  onPortalEnter: ((targetRoom: string) => void) | null = null;
 
   private ctx: CanvasRenderingContext2D;
   private raf = 0;
@@ -64,6 +79,11 @@ export class Engine {
         this.me = { ...next };
         this.path.shift();
         step -= dist;
+        
+        // Hedefe ulaştığımızda portal mıyız diye kontrol et
+        if (this.path.length === 0) {
+          this.checkPortals();
+        }
       } else {
         this.me.gx += (dx / dist) * step;
         this.me.gy += (dy / dist) * step;
@@ -84,6 +104,26 @@ export class Engine {
 
     const now = Date.now();
     this.bubbles = this.bubbles.filter(b => now - b.createdAt < 5000);
+  }
+
+  private checkPortals() {
+    const portals = PORTALS[this.currentRoom] || [];
+    const tileX = Math.round(this.me.gx);
+    const tileY = Math.round(this.me.gy);
+    
+    const portal = portals.find(p => p.gx === tileX && p.gy === tileY);
+    if (portal && this.onPortalEnter) {
+      // Portala bastık, odayı değiştir
+      this.onPortalEnter(portal.to);
+    }
+  }
+
+  // Oda değiştirildiğinde dışarıdan çağrılacak
+  setRoom(roomSlug: string) {
+    this.currentRoom = roomSlug;
+    this.me = { gx: 7, gy: 6 }; // Yeni odada ortaya çık
+    this.path = [];
+    this.otherPlayers = [];
   }
 
   click(x: number, y: number): { gx: number, gy: number } | null {
@@ -134,8 +174,35 @@ export class Engine {
     this.ctx.stroke();
   }
 
-  // displayName: Ekranda yazan isim (SEN veya arkadaşın adı)
-  // username: Sistemdeki gerçek adı (Balon eşleşmesi için)
+  private drawPortal(gx: number, gy: number, label: string) {
+    const { sx, sy } = gridToScreen(gx, gy, this.layout);
+    const { tileW, tileH } = this.layout;
+    
+    // Kapı parlaması (Animasyonlu)
+    const pulse = (Math.sin(Date.now() / 200) + 1) / 2;
+    
+    this.ctx.beginPath();
+    this.ctx.moveTo(sx, sy);
+    this.ctx.lineTo(sx + tileW / 2, sy + tileH / 2);
+    this.ctx.lineTo(sx, sy + tileH);
+    this.ctx.lineTo(sx - tileW / 2, sy + tileH / 2);
+    this.ctx.closePath();
+    this.ctx.fillStyle = `rgba(56, 189, 248, ${0.4 + pulse * 0.4})`;
+    this.ctx.fill();
+    this.ctx.strokeStyle = "#38bdf8";
+    this.ctx.lineWidth = 2;
+    this.ctx.stroke();
+
+    // Kapı etiketi
+    this.ctx.font = "bold 11px sans-serif";
+    this.ctx.textAlign = "center";
+    this.ctx.fillStyle = "#ffffff";
+    this.ctx.strokeStyle = "#000000";
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeText(label, sx, sy + tileH / 2 + 4);
+    this.ctx.fillText(label, sx, sy + tileH / 2 + 4);
+  }
+
   private drawCharacter(gx: number, gy: number, color: string, displayName: string, username: string, isMe: boolean) {
     const { sx, sy } = gridToScreen(gx, gy, this.layout);
     const cy = sy + this.layout.tileH / 2;
@@ -161,7 +228,6 @@ export class Engine {
     this.ctx.strokeText(displayName, sx, cy - 55);
     this.ctx.fillText(displayName, sx, cy - 55);
 
-    // BALON ÇİZİMİ (Gerçek username ile arıyoruz)
     const bubble = this.bubbles.find(b => b.sender === username);
     if (bubble) {
       this.ctx.font = "14px sans-serif";
@@ -191,13 +257,21 @@ export class Engine {
 
   private render() {
     this.resize();
+    const theme = ROOMS[this.currentRoom] || ROOMS["cadde-1"];
+    
     this.ctx.fillStyle = "#020617";
     this.ctx.fillRect(0, 0, this.layout.width, this.layout.height);
 
     for (let gy = 0; gy < ROWS; gy++) {
       for (let gx = 0; gx < COLS; gx++) {
-        this.drawTile(gx, gy, (gx + gy) % 2 === 0 ? "#334155" : "#293548", "#1e293b");
+        this.drawTile(gx, gy, (gx + gy) % 2 === 0 ? theme.floorA : theme.floorB, "#1e293b");
       }
+    }
+
+    // Kapıları çiz (Zeminin üstüne, karakterlerin altına)
+    const portals = PORTALS[this.currentRoom] || [];
+    for (const p of portals) {
+      this.drawPortal(p.gx, p.gy, p.label);
     }
 
     type Drawable = { depth: number, draw: () => void };
@@ -216,6 +290,6 @@ export class Engine {
     });
 
     chars.sort((a, b) => a.depth - b.depth);
-for (const c of chars) c.draw();
+    for (const c of chars) c.draw();
   }
 }
