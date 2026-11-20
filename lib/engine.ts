@@ -216,6 +216,6 @@ export class Engine {
     });
 
     chars.sort((a, b) => a.depth - b.depth);
-    for (const c of chars) chars.draw();
+for (const c of chars) c.draw();
   }
 }
