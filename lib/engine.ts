@@ -59,7 +59,7 @@ export class Engine {
 
   onPortalEnter: ((targetRoom: string) => void) | null = null;
   onNpcClick: ((npc: Npc) => void) | null = null;
-  onWaterClick: (() => void) | null = null; // YENİ: Suya tıklama
+  onWaterClick: (() => void) | null = null;
 
   private ctx: CanvasRenderingContext2D;
   private raf = 0;
@@ -157,8 +157,7 @@ export class Engine {
       return { gx, gy, isNpc: true };
     }
 
-    // İskele'de suya tıklanırsa (Sağ taraf)
-    if (this.currentRoom === "iskele" && gx >= 14) {
+    if (this.currentRoom === "iskele" && gx >= 12) {
       if (this.onWaterClick) this.onWaterClick();
       return { gx, gy, isWater: true };
     }
@@ -175,7 +174,7 @@ export class Engine {
     return { gx, gy };
   }
 
- private resize() {
+  private resize() {
     const parent = this.canvas.parentElement;
     if (!parent) return;
     
@@ -183,19 +182,14 @@ export class Engine {
     const h = parent.clientHeight;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     
-    // Ekran boyutlarını tam sayıya yuvarlıyoruz
     const targetW = Math.round(w * dpr);
     const targetH = Math.round(h * dpr);
 
-    // Canvas'ın iç (çözünürlük) boyutu değiştiyse güncelle
     if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
       this.canvas.width = targetW;
       this.canvas.height = targetH;
-      
-      // Canvas'ın CSS boyutunu her zaman ebeveyn div'in boyutuna eşitle (Bu satır çok önemli!)
       this.canvas.style.width = `${w}px`;
       this.canvas.style.height = `${h}px`;
-      
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       this.layout = getLayout(w, h, COLS, ROWS);
     }
@@ -222,7 +216,6 @@ export class Engine {
     const { tileW, tileH } = this.layout;
     const pulse = (Math.sin(Date.now() / 300) + 1) / 2;
     
-    // Orijinal Ok (Parlayan)
     this.ctx.save();
     this.ctx.translate(sx, sy + tileH / 2);
     this.ctx.beginPath();
@@ -238,7 +231,6 @@ export class Engine {
     this.ctx.fill();
     this.ctx.restore();
 
-    // Yan Karedeki Tabela
     const signPos = gridToScreen(signGx, signGy, this.layout);
     this.ctx.save();
     this.ctx.font = "bold 11px sans-serif";
@@ -248,10 +240,10 @@ export class Engine {
     const bx = signPos.sx - bw / 2;
     const by = signPos.sy - 5;
 
-    this.ctx.fillStyle = "#78350f"; // Ahşap direk
+    this.ctx.fillStyle = "#78350f";
     this.ctx.fillRect(signPos.sx - 2, by + bh, 4, 15);
 
-    this.ctx.fillStyle = "#b45309"; // Ahşap pano
+    this.ctx.fillStyle = "#b45309";
     this.ctx.beginPath();
     this.ctx.roundRect(bx, by, bw, bh, 4);
     this.ctx.fill();
@@ -323,21 +315,17 @@ export class Engine {
     }
   }
 
-    private render() {
+  private render() {
     this.resize();
     const theme = ROOMS[this.currentRoom] || ROOMS["cadde-1"];
     
-    // Canvas'ı tamamen temizle (Hayalet görüntüyü önler)
-    // DPR kullandığımız için temizlerken canvas'ın gerçek boyutlarını kullanıyoruz
     this.ctx.fillStyle = "#020617";
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     for (let gy = 0; gy < ROWS; gy++) {
       for (let gx = 0; gx < COLS; gx++) {
         let tileColor = (gx + gy) % 2 === 0 ? theme.floorA : theme.floorB;
-        // İskele'de sağ tarafı su yapalım
         if (this.currentRoom === "iskele" && gx >= 12) {
-
           tileColor = "#0284c7";
         }
         this.drawTile(gx, gy, tileColor, "#1e293b");
